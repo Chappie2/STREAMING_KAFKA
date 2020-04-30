@@ -37,8 +37,8 @@ def run_spark_job(spark):
       .option("kafka.bootstrap.servers", "localhost:9092") \
       .option("subscribe", "sfpd.service.calls") \
       .option("startingOffsets", "earliest") \
-      .option("maxRatePerPartition", 200) \
-      .option("maxOffsetPerTrigger", 2) \
+      .option("maxRatePerPartition", 20) \
+      .option("maxOffsetPerTrigger", 200) \
       .option("stopGracefullyOnShutdown", "true") \
       .load()
     
@@ -95,6 +95,8 @@ if __name__ == "__main__":
         .builder \
         .master("local[*]") \
         .config("spark.ui.port",3000) \
+        .config("spark.driver.memory","2g") \
+        .config("spark.executor.memory","2g") \
         .appName("ServiceCalls") \
         .getOrCreate()
     
