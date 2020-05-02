@@ -9,11 +9,11 @@ import findspark
 schema = StructType([
        StructField("crime_id", StringType(), True),
        StructField("original_crime_type_name", StringType(), True),
-       StructField("report_date", StringType(), True),
-       StructField("call_date", StringType(), True),
-       StructField("offense_date", StringType(), True),
+       StructField("report_date", TimestampType(), True),
+       StructField("call_date", TimestampType(), True),
+       StructField("offense_date", TimestampType(), True),
        StructField("call_time", StringType(), True),
-       StructField("call_date_time", StringType(), True),
+       StructField("call_date_time", TimestampType(), True),
        StructField("disposition", StringType(), True),
        StructField("address", StringType(), True),
        StructField("city", StringType(), True),
@@ -54,12 +54,13 @@ def run_spark_job(spark):
 
     # TODO select original_crime_type_name and disposition
     distinct_table = service_table \
-        .select("original_crime_type_name","disposition").distinct()
+        .withWatermark("call_date_time", "20 seconds").select("original_crime_type_name","disposition").distinct()
 
     # count the number of original crime type
     agg_df = distinct_table \
-        .agg(psf.count('original_crime_type_name').alias('count')) 
+        .agg(psf.count('original_crime_type_name').alias('count'))
     
+    logger.info("Streaming count of crime types")
     # TODO Q1. Submit a screen shot of a batch ingestion of the aggregation
     # TODO write output stream
     query_1 = agg_df \
@@ -71,6 +72,7 @@ def run_spark_job(spark):
     # TODO attach a ProgressReporter
     query_1.awaitTermination()
     
+    logger.debug("Reading static data from disk")
     # TODO get the right radio code json path
     file_name = 'radio_code.json'
     radio_df = spark.read.json(file_name, multiLine=True)
@@ -80,10 +82,17 @@ def run_spark_job(spark):
     # TODO rename disposition_code column to disposition
     radio_df.withColumnRenamed("disposition_code", "disposition")
     
+    logger.info("Streaming crime types and descriptions")
     # TODO join on disposition column
-    query_2 = agg_df\
+    joined_df = agg_df\
     .join(radio_code_df, col('agg_df.disposition') == col('radio_df.disposition'), 'left_outer')
-
+    
+    query_2 = joined_df \
+        .writeStream \
+        .format('console') \
+        .outputMode('Complete') \
+        .start()
+    
     query_2.awaitTermination()
 
 if __name__ == "__main__":
